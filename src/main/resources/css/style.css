@@ -32,7 +32,3 @@ div.navigation-wrapper {
     display: none;
     width: 0;
 }
-
-html, body {
-    scroll-behavior: smooth;
-}
