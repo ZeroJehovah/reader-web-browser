@@ -67,13 +67,6 @@ public class ReaderWebBrowser {
         browser = engine.newBrowser();
         BrowserView browserView = BrowserView.newInstance(browser);
         frame.add(browserView, BorderLayout.CENTER);
-        frame.setVisible(true);
-        isWindowVisible = true;
-    }
-
-    private static void loadWebPage() {
-        // 加载网页
-        browser.navigation().loadUrl(url);
 
         browser.navigation().on(FrameLoadFinished.class, event -> {
             if (event.frame().isMain()) {
@@ -81,7 +74,12 @@ public class ReaderWebBrowser {
                 browser.mainFrame().ifPresent(frame -> frame.executeJavaScript(Javascript.injectCss()));
             }
         });
+    }
 
+    private static void loadWebPage() {
+        showWindow();
+        // 加载网页
+        browser.navigation().loadUrl(url);
     }
 
     private static void initSystemTray() {
@@ -89,6 +87,9 @@ public class ReaderWebBrowser {
 
         // 创建一个弹出菜单，添加退出按钮
         PopupMenu popup = new PopupMenu();
+        MenuItem reloadMenu = new MenuItem("Reload");
+        reloadMenu.addActionListener(event -> loadWebPage());
+        popup.add(reloadMenu);
         MenuItem exitMenu = new MenuItem("Exit");
         exitMenu.addActionListener(event -> System.exit(0));
         popup.add(exitMenu);
