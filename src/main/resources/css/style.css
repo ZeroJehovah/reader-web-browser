@@ -3,7 +3,6 @@
         background: #f7f8fa !important;
         width: 100% !important;
         border: none !important;
-        border-top: aqua solid 1px !important;
     }
 }
 
@@ -28,7 +27,6 @@ div.navigation-wrapper {
     display: none !important
 }
 
-::-webkit-scrollbar {
+body::-webkit-scrollbar {
     display: none;
-    width: 0;
 }
