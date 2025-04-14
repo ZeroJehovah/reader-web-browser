@@ -1,6 +1,8 @@
 package com.icerovah.readerWebBrowser.application;
 
 import com.icerovah.readerWebBrowser.config.Javascript;
+import com.icerovah.readerWebBrowser.consts.FilePath;
+import com.icerovah.readerWebBrowser.util.FileUtil;
 import com.teamdev.jxbrowser.browser.Browser;
 import com.teamdev.jxbrowser.engine.Engine;
 import com.teamdev.jxbrowser.engine.EngineOptions;
@@ -10,6 +12,7 @@ import com.teamdev.jxbrowser.view.swing.BrowserView;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.IOException;
 import java.net.URL;
 
 import static com.icerovah.readerWebBrowser.config.Config.*;
@@ -22,7 +25,7 @@ public class ReaderWebBrowser {
     private static Engine engine;
     private static Browser browser;
 
-    public static void launch() {
+    public static void launch() throws IOException {
         // 初始化窗口
         initFrame();
 
@@ -82,7 +85,7 @@ public class ReaderWebBrowser {
         browser.navigation().loadUrl(url);
     }
 
-    private static void initSystemTray() {
+    private static void initSystemTray() throws IOException {
         SystemTray tray = SystemTray.getSystemTray();
 
         // 创建一个弹出菜单，添加退出按钮
@@ -105,7 +108,7 @@ public class ReaderWebBrowser {
         }
     }
 
-    private static TrayIcon createTrayIcon(PopupMenu popup) {
+    private static TrayIcon createTrayIcon(PopupMenu popup) throws IOException {
         TrayIcon trayIcon = new TrayIcon(getIconFromResources(), "ReaderWebBrowser", popup);
 
         // 为托盘图标添加鼠标点击事件监听器
@@ -124,16 +127,11 @@ public class ReaderWebBrowser {
         return trayIcon;
     }
 
-    private static java.awt.Image getIconFromResources() {
+    private static java.awt.Image getIconFromResources() throws IOException {
         // 获取图片资源的 URL
-        URL iconUrl = ReaderWebBrowser.class.getClassLoader().getResource("icon/favicon.png");
-        if (iconUrl != null) {
-            System.out.println("图标资源路径: " + iconUrl);
-            // 使用 Toolkit 加载图片
-            return Toolkit.getDefaultToolkit().getImage(iconUrl);
-        }
-        System.err.println("无法找到图标资源。");
-        return new ImageIcon().getImage();
+        URL iconUrl = FileUtil.getResource(FilePath.TRAY_ICON);
+        // 使用 Toolkit 加载图片
+        return Toolkit.getDefaultToolkit().getImage(iconUrl);
     }
 
     private static void showWindow() {

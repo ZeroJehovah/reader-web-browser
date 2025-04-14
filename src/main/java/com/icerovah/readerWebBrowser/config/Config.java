@@ -1,5 +1,8 @@
 package com.icerovah.readerWebBrowser.config;
 
+import com.icerovah.readerWebBrowser.consts.FilePath;
+import com.icerovah.readerWebBrowser.util.FileUtil;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -18,7 +21,7 @@ public class Config {
 
     public static void read() throws IOException {
         Properties properties = new Properties();
-        try (InputStream inputStream = Config.class.getClassLoader().getResourceAsStream("config.properties")) {
+        try (InputStream inputStream = FileUtil.getResourceAsStream(FilePath.CONFIG)) {
             // 加载配置文件
             properties.load(inputStream);
             // 获取配置项
