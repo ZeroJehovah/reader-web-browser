@@ -1,0 +1,49 @@
+{
+  "name": "reader-web-browser",
+  "version": "3.0.0",
+  "description": "ReaderWebBrowser —— Electron 版（对应 Java/JXBrowser 版的功能复刻）",
+  "author": "icerovah",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "start:noconsole": "electron . --disable-logging",
+    "dist": "electron-builder --win",
+    "dist:portable": "electron-builder --win portable",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.icerovah.readerWebBrowser",
+    "productName": "ReaderWebBrowser",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "lib/*.js",
+      "!lib/*.test.js",
+      "app-resources/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "app-resources/icon/app.ico"
+    },
+    "portable": {
+      "artifactName": "reader-web-browser-${version}-portable.exe"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "app-resources/**/*"
+    ]
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  }
+}
