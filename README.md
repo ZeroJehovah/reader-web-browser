@@ -7,7 +7,7 @@
 | 功能 | Java 版 | Electron 版 |
 |---|---|---|
 | 无边框窗口 | `Window.Type.UTILITY` + `setUndecorated(true)` | `frame:false` + `type:'toolbar'` + `skipTaskbar` |
-| 窗口位置/尺寸 | `config.properties` 的 width/height/offsetX/offsetY | 同一配置键名；通过托盘 `Resize Window...` 自定义宽高，并自动写回配置 |
+| 窗口位置/尺寸 | `config.properties` 的 width/height/offsetX/offsetY | 同一配置键名；通过托盘 `Config` 实时调整 X/Y/宽度/高度，并自动写回配置 |
 | 失焦隐藏 | `windowLostFocus` -> `hideWindow()` | `blur` -> `win.hide()` |
 | 托盘图标 | AWT `SystemTray` + 16x16 PNG | Electron `Tray` + 同一 16x16 PNG |
 | 托盘左键点击 | 切换窗口显示/隐藏 | `tray.on('click')` 切换 |
@@ -19,7 +19,7 @@
 | 页面右键菜单 | 无（JXBrowser 默认不显示） | `context-menu` 事件 preventDefault |
 | 退出 | `System.exit(0)` / `EXIT_ON_CLOSE` | `app.quit()` |
 
-窗口完成移动或通过托盘调整尺寸后，Electron 版会把最新的 `offsetX`、`offsetY`、`width`、`height` 写回**外部** `config.properties`。窗口保持无边框、无系统阴影和无圆角；托盘右键菜单中的 `Resize Window...` 可输入新的宽度和高度。写入保留原有注释、其他配置项和换行格式；如果外部文件尚不存在，会以打包内的默认配置为模板，在 exe 同目录生成该文件。开发态对应仓库根目录的 `config.properties`。
+窗口完成移动或在托盘 `Config` 中调整位置/尺寸后，Electron 版会把最新的 `offsetX`、`offsetY`、`width`、`height` 写回**外部** `config.properties`。窗口保持无边框、无系统阴影和无圆角；`Config` 面板打开时浏览器窗口保持可见，四个数值的改动会实时应用。写入保留原有注释、其他配置项和换行格式；如果外部文件尚不存在，会以打包内的默认配置为模板，在 exe 同目录生成该文件。开发态对应仓库根目录的 `config.properties`。
 
 ## 目录结构
 

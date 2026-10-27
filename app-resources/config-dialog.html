@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Config</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: #202124;
+      background: #f7f7f8;
+      font: 14px/1.45 "Segoe UI", sans-serif;
+      user-select: none;
+    }
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 46px;
+      padding: 0 14px 0 18px;
+      border-bottom: 1px solid #e2e4e8;
+      background: #fff;
+      -webkit-app-region: drag;
+    }
+    .titlebar h1 { margin: 0; font-size: 17px; font-weight: 600; }
+    .close-x {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #60656f;
+      font-size: 22px;
+      line-height: 30px;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    .close-x:hover { background: #eceef2; }
+    .content { padding: 16px 18px 14px; }
+    section { margin-bottom: 14px; }
+    h2 {
+      margin: 0 0 8px;
+      color: #5f6368;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .fields { display: flex; gap: 12px; }
+    label { flex: 1; color: #3c4043; font-weight: 500; }
+    input {
+      width: 100%;
+      height: 34px;
+      margin-top: 5px;
+      padding: 4px 9px;
+      border: 1px solid #b8bcc4;
+      background: #fff;
+      color: #202124;
+      font: inherit;
+      user-select: text;
+      -webkit-app-region: no-drag;
+    }
+    input:focus { outline: 2px solid #2f6fed; outline-offset: -1px; }
+    .error { min-height: 20px; margin: 0 0 4px; color: #b42318; }
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .hint { margin: 0; color: #6f747d; font-size: 12px; }
+    button.action {
+      min-width: 76px;
+      height: 32px;
+      border: 1px solid #b8bcc4;
+      background: #fff;
+      color: #202124;
+      font: inherit;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    button.action:hover { background: #f0f2f5; }
+  </style>
+</head>
+<body>
+  <header class="titlebar">
+    <h1>Config</h1>
+    <button id="close-x" class="close-x" type="button" aria-label="Close">&times;</button>
+  </header>
+  <main class="content">
+    <section>
+      <h2>Position</h2>
+      <div class="fields">
+        <label>X<input id="offsetX" type="number" step="1" required></label>
+        <label>Y<input id="offsetY" type="number" step="1" required></label>
+      </div>
+    </section>
+    <section>
+      <h2>Size</h2>
+      <div class="fields">
+        <label>Width<input id="width" type="number" min="100" max="10000" step="1" required></label>
+        <label>Height<input id="height" type="number" min="100" max="10000" step="1" required></label>
+      </div>
+    </section>
+    <div id="error" class="error"></div>
+    <footer class="footer">
+      <span class="hint">Changes apply immediately.</span>
+      <button id="close" class="action" type="button">Close</button>
+    </footer>
+  </main>
+  <script>
+    const fields = ['offsetX', 'offsetY', 'width', 'height'];
+    const inputs = Object.fromEntries(fields.map((name) => [name, document.getElementById(name)]));
+    const error = document.getElementById('error');
+    let applyTimer = null;
+    let requestId = 0;
+
+    function readValues() {
+      const values = {};
+      for (const name of fields) {
+        if (inputs[name].value === '') throw new Error('All four values are required.');
+        const number = Number(inputs[name].value);
+        if (!Number.isInteger(number)) throw new Error('All values must be integers.');
+        values[name] = number;
+      }
+      if (values.width < 100 || values.width > 10000 || values.height < 100 || values.height > 10000) {
+        throw new Error('Width and height must be between 100 and 10000.');
+      }
+      return values;
+    }
+
+    function syncFields(bounds) {
+      for (const name of fields) {
+        if (document.activeElement !== inputs[name]) inputs[name].value = bounds[name];
+      }
+    }
+
+    async function applyValues() {
+      clearTimeout(applyTimer);
+      const currentRequest = ++requestId;
+      try {
+        const values = readValues();
+        error.textContent = '';
+        await window.windowConfig.update(values);
+      } catch (err) {
+        if (currentRequest === requestId) {
+          error.textContent = err.message || 'Unable to update the window.';
+        }
+      }
+    }
+
+    for (const name of fields) {
+      inputs[name].addEventListener('input', () => {
+        clearTimeout(applyTimer);
+        applyTimer = setTimeout(applyValues, 60);
+      });
+    }
+
+    async function closeDialog() {
+      clearTimeout(applyTimer);
+      await applyValues();
+      window.windowConfig.close();
+    }
+
+    document.getElementById('close').addEventListener('click', closeDialog);
+    document.getElementById('close-x').addEventListener('click', closeDialog);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeDialog();
+    });
+
+    window.windowConfig.onBoundsChanged(syncFields);
+    window.windowConfig.getCurrent().then((bounds) => {
+      syncFields(bounds);
+      inputs.offsetX.focus();
+      inputs.offsetX.select();
+    }).catch(() => {
+      error.textContent = 'Unable to read the current window settings.';
+    });
+  </script>
+</body>
+</html>

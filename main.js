@@ -1,18 +1,18 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen } = require('electron');
 const path = require('path');
 const { readConfig, saveWindowBounds } = require('./lib/config');
 const { injectCss } = require('./lib/inject');
 const { resolveResource, readResourceBuffer } = require('./lib/resources');
-const { normalizeWindowSize } = require('./lib/windowSize');
+const { normalizeWindowBounds } = require('./lib/windowBounds');
 
 const TRAY_TOOLTIP = 'ReaderWebBrowser';
 const WINDOW_BOUNDS_SAVE_DELAY = 200;
 
 let win = null;
 let tray = null;
-let sizeDialog = null;
+let configDialog = null;
 let config = null;
 let injectScript = null;
 let isWindowVisible = false;
@@ -135,46 +135,70 @@ function initWindow() {
   });
 }
 
-function assertSizeDialogSender(event) {
-  if (!sizeDialog || sizeDialog.isDestroyed() || event.sender !== sizeDialog.webContents) {
-    throw new Error('invalid window size dialog sender');
+function assertConfigDialogSender(event) {
+  if (!configDialog || configDialog.isDestroyed() || event.sender !== configDialog.webContents) {
+    throw new Error('invalid config dialog sender');
   }
 }
 
-function closeSizeDialog() {
-  const dialog = sizeDialog;
-  sizeDialog = null;
+function closeConfigDialog() {
+  const dialog = configDialog;
+  configDialog = null;
   if (dialog && !dialog.isDestroyed()) dialog.close();
 }
 
-function applyWindowSize(width, height) {
-  if (!win || win.isDestroyed()) throw new Error('main window is unavailable');
-  const size = normalizeWindowSize(width, height);
+function getWindowConfig() {
   const bounds = win.getBounds();
-  win.setBounds({
-    x: bounds.x,
-    y: bounds.y,
-    width: size.width,
-    height: size.height
-  }, false);
-  flushWindowBounds();
-  closeSizeDialog();
-  showWindow();
-  return size;
+  return {
+    offsetX: bounds.x,
+    offsetY: bounds.y,
+    width: bounds.width,
+    height: bounds.height
+  };
 }
 
-function openSizeDialog() {
-  if (sizeDialog && !sizeDialog.isDestroyed()) {
-    sizeDialog.show();
-    sizeDialog.focus();
+function updateWindowConfig(values) {
+  if (!win || win.isDestroyed()) throw new Error('main window is unavailable');
+  const bounds = normalizeWindowBounds(values);
+  win.setBounds({
+    x: bounds.offsetX,
+    y: bounds.offsetY,
+    width: bounds.width,
+    height: bounds.height
+  }, false);
+  scheduleWindowBoundsSave();
+  return bounds;
+}
+
+function getConfigDialogPosition(width, height) {
+  const windowBounds = win.getBounds();
+  const workArea = screen.getDisplayMatching(windowBounds).workArea;
+  let x = windowBounds.x + windowBounds.width + 12;
+  if (x + width > workArea.x + workArea.width) {
+    x = windowBounds.x - width - 12;
+  }
+  x = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width));
+  const y = Math.max(workArea.y, Math.min(windowBounds.y, workArea.y + workArea.height - height));
+  return { x, y };
+}
+
+function openConfigDialog() {
+  showWindow();
+  if (configDialog && !configDialog.isDestroyed()) {
+    configDialog.show();
+    configDialog.focus();
     return;
   }
 
-  sizeDialog = new BrowserWindow({
-    width: 360,
-    height: 225,
+  const width = 400;
+  const height = 340;
+  const position = getConfigDialogPosition(width, height);
+  const dialog = new BrowserWindow({
+    width,
+    height,
     useContentSize: true,
-    center: true,
+    x: position.x,
+    y: position.y,
     frame: false,
     resizable: false,
     minimizable: false,
@@ -187,49 +211,50 @@ function openSizeDialog() {
     skipTaskbar: true,
     autoHideMenuBar: true,
     backgroundColor: '#f7f7f8',
-    title: 'Resize Window',
+    title: 'Config',
     icon: loadTrayIcon(),
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'lib', 'size-dialog-preload.js'),
+      preload: path.join(__dirname, 'lib', 'config-dialog-preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
       devTools: false
     }
   });
+  configDialog = dialog;
 
-  sizeDialog.setMenu(null);
-  sizeDialog.removeMenu();
-  sizeDialog.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  sizeDialog.once('ready-to-show', () => {
-    if (!sizeDialog || sizeDialog.isDestroyed()) return;
-    sizeDialog.show();
-    sizeDialog.focus();
+  dialog.setMenu(null);
+  dialog.removeMenu();
+  dialog.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  dialog.once('ready-to-show', () => {
+    if (configDialog !== dialog || dialog.isDestroyed()) return;
+    dialog.show();
+    dialog.focus();
   });
-  sizeDialog.on('blur', closeSizeDialog);
-  sizeDialog.on('closed', () => {
-    sizeDialog = null;
+  dialog.on('closed', () => {
+    if (configDialog === dialog) configDialog = null;
   });
-  sizeDialog.loadFile(resolveResource('size-dialog.html')).catch((err) => {
-    process.stderr.write('加载窗口大小对话框失败: ' + (err && err.message) + '\n');
-    closeSizeDialog();
+  dialog.loadFile(resolveResource('config-dialog.html')).catch((err) => {
+    process.stderr.write('加载窗口配置对话框失败: ' + (err && err.message) + '\n');
+    if (configDialog === dialog) closeConfigDialog();
   });
 }
 
-ipcMain.handle('window-size:get', (event) => {
-  assertSizeDialogSender(event);
-  return win.getBounds();
+ipcMain.handle('window-config:get', (event) => {
+  assertConfigDialogSender(event);
+  return getWindowConfig();
 });
 
-ipcMain.handle('window-size:apply', (event, { width, height }) => {
-  assertSizeDialogSender(event);
-  return applyWindowSize(width, height);
+ipcMain.handle('window-config:update', (event, values) => {
+  assertConfigDialogSender(event);
+  return updateWindowConfig(values);
 });
 
-ipcMain.on('window-size:cancel', (event) => {
-  assertSizeDialogSender(event);
-  closeSizeDialog();
+ipcMain.on('window-config:close', (event) => {
+  assertConfigDialogSender(event);
+  closeConfigDialog();
+  flushWindowBounds();
 });
 
 function sameBounds(left, right) {
@@ -260,6 +285,9 @@ function flushWindowBounds() {
 }
 
 function scheduleWindowBoundsSave() {
+  if (configDialog && !configDialog.isDestroyed()) {
+    configDialog.webContents.send('window-config:changed', getWindowConfig());
+  }
   if (windowBoundsSaveTimer) clearTimeout(windowBoundsSaveTimer);
   windowBoundsSaveTimer = setTimeout(() => {
     windowBoundsSaveTimer = null;
@@ -274,6 +302,8 @@ function showWindow() {
 }
 
 function hideWindow() {
+  // 配置窗口打开时始终保留浏览器窗口，方便实时查看调整效果。
+  if (configDialog && !configDialog.isDestroyed()) return;
   win.hide();
   isWindowVisible = false;
 }
@@ -301,8 +331,8 @@ function initSystemTray() {
       click: () => loadWebPage()
     },
     {
-      label: 'Resize Window...',
-      click: () => openSizeDialog()
+      label: 'Config',
+      click: () => openConfigDialog()
     },
     { type: 'separator' },
     {

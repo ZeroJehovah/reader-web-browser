@@ -6,7 +6,7 @@
   "main": "main.js",
   "private": true,
   "scripts": {
-    "test": "node lib/properties.test.js && node lib/inject.test.js && node lib/config.test.js && node lib/windowSize.test.js",
+    "test": "node lib/properties.test.js && node lib/inject.test.js && node lib/config.test.js && node lib/windowBounds.test.js",
     "start": "electron .",
     "start:noconsole": "electron . --disable-logging",
     "dist": "electron-builder --win",
