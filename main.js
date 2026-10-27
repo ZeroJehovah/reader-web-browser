@@ -1,15 +1,18 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require('electron');
+const path = require('path');
 const { readConfig, saveWindowBounds } = require('./lib/config');
 const { injectCss } = require('./lib/inject');
 const { resolveResource, readResourceBuffer } = require('./lib/resources');
+const { normalizeWindowSize } = require('./lib/windowSize');
 
 const TRAY_TOOLTIP = 'ReaderWebBrowser';
 const WINDOW_BOUNDS_SAVE_DELAY = 200;
 
 let win = null;
 let tray = null;
+let sizeDialog = null;
 let config = null;
 let injectScript = null;
 let isWindowVisible = false;
@@ -44,11 +47,11 @@ function initWindow() {
     minimizable: false,
     maximizable: false,
     fullScreenable: false,
-    // 允许通过边缘拖拽和 Alt+Space -> 大小调整窗口。
-    resizable: true,
+    // 保持无边框、无原生缩放框，避免 Windows 阴影、边框和圆角。
+    resizable: false,
     hasShadow: false,
-    // WS_THICKFRAME 是 Windows 原生缩放边框和系统菜单“大小”生效的关键。
-    thickFrame: true,
+    thickFrame: false,
+    roundedCorners: false,
     backgroundColor: '#ffffff',
     title: TRAY_TOOLTIP,
     icon: loadTrayIcon(),
@@ -70,7 +73,7 @@ function initWindow() {
 
   lastSavedWindowBounds = win.getBounds();
 
-  // 同时监听过程和结束事件，原生系统菜单与边缘拖拽都能可靠落盘。
+  // 移动过程和托盘调整尺寸后都可靠落盘。
   win.on('move', scheduleWindowBoundsSave);
   win.on('resize', scheduleWindowBoundsSave);
   win.on('moved', scheduleWindowBoundsSave);
@@ -131,6 +134,103 @@ function initWindow() {
     return { action: 'deny' }; // 已手动创建窗口，阻止 Electron 再建一个。
   });
 }
+
+function assertSizeDialogSender(event) {
+  if (!sizeDialog || sizeDialog.isDestroyed() || event.sender !== sizeDialog.webContents) {
+    throw new Error('invalid window size dialog sender');
+  }
+}
+
+function closeSizeDialog() {
+  const dialog = sizeDialog;
+  sizeDialog = null;
+  if (dialog && !dialog.isDestroyed()) dialog.close();
+}
+
+function applyWindowSize(width, height) {
+  if (!win || win.isDestroyed()) throw new Error('main window is unavailable');
+  const size = normalizeWindowSize(width, height);
+  const bounds = win.getBounds();
+  win.setBounds({
+    x: bounds.x,
+    y: bounds.y,
+    width: size.width,
+    height: size.height
+  }, false);
+  flushWindowBounds();
+  closeSizeDialog();
+  showWindow();
+  return size;
+}
+
+function openSizeDialog() {
+  if (sizeDialog && !sizeDialog.isDestroyed()) {
+    sizeDialog.show();
+    sizeDialog.focus();
+    return;
+  }
+
+  sizeDialog = new BrowserWindow({
+    width: 360,
+    height: 225,
+    useContentSize: true,
+    center: true,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    hasShadow: false,
+    thickFrame: false,
+    roundedCorners: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    autoHideMenuBar: true,
+    backgroundColor: '#f7f7f8',
+    title: 'Resize Window',
+    icon: loadTrayIcon(),
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'lib', 'size-dialog-preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      devTools: false
+    }
+  });
+
+  sizeDialog.setMenu(null);
+  sizeDialog.removeMenu();
+  sizeDialog.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  sizeDialog.once('ready-to-show', () => {
+    if (!sizeDialog || sizeDialog.isDestroyed()) return;
+    sizeDialog.show();
+    sizeDialog.focus();
+  });
+  sizeDialog.on('blur', closeSizeDialog);
+  sizeDialog.on('closed', () => {
+    sizeDialog = null;
+  });
+  sizeDialog.loadFile(resolveResource('size-dialog.html')).catch((err) => {
+    process.stderr.write('加载窗口大小对话框失败: ' + (err && err.message) + '\n');
+    closeSizeDialog();
+  });
+}
+
+ipcMain.handle('window-size:get', (event) => {
+  assertSizeDialogSender(event);
+  return win.getBounds();
+});
+
+ipcMain.handle('window-size:apply', (event, { width, height }) => {
+  assertSizeDialogSender(event);
+  return applyWindowSize(width, height);
+});
+
+ipcMain.on('window-size:cancel', (event) => {
+  assertSizeDialogSender(event);
+  closeSizeDialog();
+});
 
 function sameBounds(left, right) {
   return left && right && left.x === right.x && left.y === right.y &&
@@ -200,6 +300,11 @@ function initSystemTray() {
       label: 'Reload',
       click: () => loadWebPage()
     },
+    {
+      label: 'Resize Window...',
+      click: () => openSizeDialog()
+    },
+    { type: 'separator' },
     {
       label: 'Exit',
       click: () => app.quit()

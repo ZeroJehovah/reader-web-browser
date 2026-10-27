@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Resize Window</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 22px 24px 18px;
+      color: #202124;
+      background: #f7f7f8;
+      font: 14px/1.5 "Segoe UI", sans-serif;
+      user-select: none;
+    }
+    h1 { margin: 0 0 18px; font-size: 18px; font-weight: 600; }
+    .fields { display: flex; gap: 14px; }
+    label { flex: 1; font-weight: 500; }
+    input {
+      width: 100%;
+      height: 34px;
+      margin-top: 6px;
+      padding: 4px 9px;
+      border: 1px solid #b8bcc4;
+      border-radius: 4px;
+      background: #fff;
+      color: #202124;
+      font: inherit;
+    }
+    input:focus { outline: 2px solid #5b8def; outline-offset: -1px; }
+    .error { min-height: 21px; margin: 8px 0 10px; color: #b42318; }
+    .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+    button {
+      min-width: 76px;
+      height: 32px;
+      border: 1px solid #b8bcc4;
+      border-radius: 4px;
+      background: #fff;
+      color: #202124;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.primary { border-color: #2f6fed; background: #2f6fed; color: #fff; }
+    button:hover { filter: brightness(0.97); }
+  </style>
+</head>
+<body>
+  <form id="size-form">
+    <h1>Resize Window</h1>
+    <div class="fields">
+      <label>Width<input id="width" type="number" min="100" max="10000" step="1" required></label>
+      <label>Height<input id="height" type="number" min="100" max="10000" step="1" required></label>
+    </div>
+    <div id="error" class="error"></div>
+    <div class="buttons">
+      <button id="cancel" type="button">Cancel</button>
+      <button class="primary" type="submit">Apply</button>
+    </div>
+  </form>
+  <script>
+    const form = document.getElementById('size-form');
+    const widthInput = document.getElementById('width');
+    const heightInput = document.getElementById('height');
+    const error = document.getElementById('error');
+
+    window.windowSizeDialog.getCurrent().then(({ width, height }) => {
+      widthInput.value = width;
+      heightInput.value = height;
+      widthInput.focus();
+      widthInput.select();
+    }).catch(() => {
+      error.textContent = 'Unable to read the current window size.';
+    });
+
+    document.getElementById('cancel').addEventListener('click', () => {
+      window.windowSizeDialog.cancel();
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      error.textContent = '';
+      try {
+        await window.windowSizeDialog.apply(widthInput.value, heightInput.value);
+      } catch (err) {
+        error.textContent = err.message || 'Unable to resize the window.';
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') window.windowSizeDialog.cancel();
+    });
+  </script>
+</body>
+</html>
