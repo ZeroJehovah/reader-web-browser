@@ -35,4 +35,5 @@ build/
 ### Electron ###
 node_modules/
 release/
+/config.properties
 *.local

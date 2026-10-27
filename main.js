@@ -1,19 +1,20 @@
 'use strict';
 
 const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron');
-const fs = require('fs');
-const path = require('path');
-const { readConfig } = require('./lib/config');
+const { readConfig, saveWindowBounds } = require('./lib/config');
 const { injectCss } = require('./lib/inject');
 const { resolveResource, readResourceBuffer } = require('./lib/resources');
 
 const TRAY_TOOLTIP = 'ReaderWebBrowser';
+const WINDOW_BOUNDS_SAVE_DELAY = 200;
 
 let win = null;
 let tray = null;
 let config = null;
 let injectScript = null;
 let isWindowVisible = false;
+let windowBoundsSaveTimer = null;
+let lastSavedWindowBounds = null;
 
 function loadTrayIcon() {
   // 打包后 app-resources 在 asar 内，部分 nativeImage 场景需要显式读字节。
@@ -43,10 +44,11 @@ function initWindow() {
     minimizable: false,
     maximizable: false,
     fullScreenable: false,
-    // Java: 未设置 resizable，Undecorated JFrame 无法拖边缩放
-    resizable: false,
+    // 允许通过边缘拖拽和 Alt+Space -> 大小调整窗口。
+    resizable: true,
     hasShadow: false,
-    thickFrame: false,
+    // WS_THICKFRAME 是 Windows 原生缩放边框和系统菜单“大小”生效的关键。
+    thickFrame: true,
     backgroundColor: '#ffffff',
     title: TRAY_TOOLTIP,
     icon: loadTrayIcon(),
@@ -65,6 +67,15 @@ function initWindow() {
   // Java: setUndecorated(true) 后窗口无标题栏、无最大化按钮
   win.setMenu(null);
   win.removeMenu();
+
+  lastSavedWindowBounds = win.getBounds();
+
+  // 同时监听过程和结束事件，原生系统菜单与边缘拖拽都能可靠落盘。
+  win.on('move', scheduleWindowBoundsSave);
+  win.on('resize', scheduleWindowBoundsSave);
+  win.on('moved', scheduleWindowBoundsSave);
+  win.on('resized', scheduleWindowBoundsSave);
+  win.on('close', flushWindowBounds);
 
   // 对齐 Java：退出即整个进程退出。
   win.on('closed', () => {
@@ -119,6 +130,41 @@ function initWindow() {
     popup.on('closed', () => {});
     return { action: 'deny' }; // 已手动创建窗口，阻止 Electron 再建一个。
   });
+}
+
+function sameBounds(left, right) {
+  return left && right && left.x === right.x && left.y === right.y &&
+    left.width === right.width && left.height === right.height;
+}
+
+function flushWindowBounds() {
+  if (windowBoundsSaveTimer) {
+    clearTimeout(windowBoundsSaveTimer);
+    windowBoundsSaveTimer = null;
+  }
+  if (!win || win.isDestroyed()) return;
+
+  const bounds = win.getBounds();
+  if (sameBounds(bounds, lastSavedWindowBounds)) return;
+
+  try {
+    saveWindowBounds(bounds);
+    lastSavedWindowBounds = bounds;
+    config.width = bounds.width;
+    config.height = bounds.height;
+    config.offsetX = bounds.x;
+    config.offsetY = bounds.y;
+  } catch (err) {
+    process.stderr.write('保存窗口配置失败: ' + (err && err.message) + '\n');
+  }
+}
+
+function scheduleWindowBoundsSave() {
+  if (windowBoundsSaveTimer) clearTimeout(windowBoundsSaveTimer);
+  windowBoundsSaveTimer = setTimeout(() => {
+    windowBoundsSaveTimer = null;
+    flushWindowBounds();
+  }, WINDOW_BOUNDS_SAVE_DELAY);
 }
 
 function showWindow() {
@@ -181,6 +227,10 @@ app.whenReady().then(() => {
 }).catch((err) => {
   process.stderr.write('启动失败: ' + (err && err.stack || err) + '\n');
   app.exit(1);
+});
+
+app.on('before-quit', () => {
+  flushWindowBounds();
 });
 
 app.on('window-all-closed', () => {

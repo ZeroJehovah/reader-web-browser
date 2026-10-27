@@ -7,7 +7,7 @@
 | 功能 | Java 版 | Electron 版 |
 |---|---|---|
 | 无边框窗口 | `Window.Type.UTILITY` + `setUndecorated(true)` | `frame:false` + `type:'toolbar'` + `skipTaskbar` |
-| 固定尺寸/位置 | `config.properties` 的 width/height/offsetX/offsetY | 同一 `config.properties`，同一键名 |
+| 窗口位置/尺寸 | `config.properties` 的 width/height/offsetX/offsetY | 同一配置键名；支持 Alt+Space 移动/大小、拖拽边缘缩放，并自动写回配置 |
 | 失焦隐藏 | `windowLostFocus` -> `hideWindow()` | `blur` -> `win.hide()` |
 | 托盘图标 | AWT `SystemTray` + 16x16 PNG | Electron `Tray` + 同一 16x16 PNG |
 | 托盘左键点击 | 切换窗口显示/隐藏 | `tray.on('click')` 切换 |
@@ -18,6 +18,8 @@
 | 新窗口/弹窗 | JXBrowser Swing 默认为弹窗新建 JFrame | `setWindowOpenHandler` 手动创建 BrowserWindow，跟随页面声明的尺寸 |
 | 页面右键菜单 | 无（JXBrowser 默认不显示） | `context-menu` 事件 preventDefault |
 | 退出 | `System.exit(0)` / `EXIT_ON_CLOSE` | `app.quit()` |
+
+窗口完成移动或缩放后，Electron 版会把最新的 `offsetX`、`offsetY`、`width`、`height` 写回**外部** `config.properties`。写入保留原有注释、其他配置项和换行格式；如果外部文件尚不存在，会以打包内的默认配置为模板，在 exe 同目录生成该文件。开发态对应仓库根目录的 `config.properties`。
 
 ## 目录结构
 
@@ -34,6 +36,7 @@ app-resources/               打包内默认资源（config/css/js/icon）
 ```bash
 npm install
 npm start
+npm test
 ```
 
 开发态外部覆盖目录为仓库根目录（即 `package.json` 所在目录），等价于 Java 版“jar 同目录”。
