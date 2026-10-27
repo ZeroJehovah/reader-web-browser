@@ -18,6 +18,7 @@ let injectScript = null;
 let isWindowVisible = false;
 let windowBoundsSaveTimer = null;
 let lastSavedWindowBounds = null;
+let windowAlwaysOnTopBeforeConfig = null;
 
 function loadTrayIcon() {
   // 打包后 app-resources 在 asar 内，部分 nativeImage 场景需要显式读字节。
@@ -145,6 +146,24 @@ function closeConfigDialog() {
   const dialog = configDialog;
   configDialog = null;
   if (dialog && !dialog.isDestroyed()) dialog.close();
+  restoreWindowTopState();
+}
+
+function keepBrowserVisibleForConfig() {
+  if (windowAlwaysOnTopBeforeConfig === null && win && !win.isDestroyed()) {
+    windowAlwaysOnTopBeforeConfig = win.isAlwaysOnTop();
+    win.setAlwaysOnTop(true);
+  }
+  showWindow();
+  win.moveTop();
+}
+
+function restoreWindowTopState() {
+  if (windowAlwaysOnTopBeforeConfig === null) return;
+  if (win && !win.isDestroyed()) {
+    win.setAlwaysOnTop(windowAlwaysOnTopBeforeConfig);
+  }
+  windowAlwaysOnTopBeforeConfig = null;
 }
 
 function getWindowConfig() {
@@ -183,7 +202,7 @@ function getConfigDialogPosition(width, height) {
 }
 
 function openConfigDialog() {
-  showWindow();
+  keepBrowserVisibleForConfig();
   if (configDialog && !configDialog.isDestroyed()) {
     configDialog.show();
     configDialog.focus();
@@ -234,6 +253,7 @@ function openConfigDialog() {
   });
   dialog.on('closed', () => {
     if (configDialog === dialog) configDialog = null;
+    restoreWindowTopState();
   });
   dialog.loadFile(resolveResource('config-dialog.html')).catch((err) => {
     process.stderr.write('加载窗口配置对话框失败: ' + (err && err.message) + '\n');
